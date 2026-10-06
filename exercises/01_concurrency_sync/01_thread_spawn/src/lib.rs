@@ -72,6 +72,8 @@ use std::time::Duration;
 ///
 /// Using `thread::Builder` you can assign a name to a thread (helpful for
 /// debugging) and set its stack size.
+/// 
+/// 
 ///
 /// ```rust
 /// use std::thread;
@@ -104,11 +106,12 @@ use std::time::Duration;
 ///     let a = vec![1, 2, 3];
 ///     let b = vec![4, 5, 6];
 ///
+/// 
 ///     let (sum_a, sum_b) = thread::scope(|s| {
 ///         let h1 = s.spawn(|| a.iter().sum::<i32>());
 ///         let h2 = s.spawn(|| b.iter().sum::<i32>());
 ///         (h1.join().unwrap(), h2.join().unwrap())
-///     });
+///     }); //可以借用外面的数据
 ///
 ///     // `a` and `b` are still accessible here.
 ///     println!("sum_a = {}, sum_b = {}", sum_a, sum_b);
@@ -157,7 +160,14 @@ pub fn double_in_thread(numbers: Vec<i32>) -> Vec<i32> {
     // TODO: Create a new thread to multiply each element of numbers by 2
     // Use thread::spawn and move closure
     // Use join().unwrap() to get result
-    todo!()
+    let handle = thread::spawn(move ||{
+        let mut numbers = numbers;
+        for i in &mut numbers {
+            (*i) *= 2; 
+        }
+        numbers
+    });
+    handle.join().unwrap()
 }
 
 /// Sum two vectors in parallel, returning a tuple of two sums.
@@ -167,7 +177,13 @@ pub fn double_in_thread(numbers: Vec<i32>) -> Vec<i32> {
 pub fn parallel_sum(a: Vec<i32>, b: Vec<i32>) -> (i32, i32) {
     // TODO: Create two threads to sum a and b respectively
     // Join both threads to get results
-    todo!()
+    let handle_first = thread::spawn(move ||{
+        a.iter().sum::<i32>()
+    });
+    let handle_second = thread::spawn(move ||{
+        b.iter().sum::<i32>()
+    });
+    (handle_first.join().unwrap(), handle_second.join().unwrap())
 }
 
 // ============================================================================
@@ -183,9 +199,16 @@ pub fn parallel_sum(a: Vec<i32>, b: Vec<i32>) -> (i32, i32) {
 #[allow(unused_variables)]
 pub fn named_sleeper(value: i32, ms: u64) -> i32 {
     // TODO: Create a thread builder with name "sleeper"
+    let builder = thread::Builder::new()
+        .name("sleeper".into())
+        .stack_size(32 * 1024);
     // TODO: Spawn a thread that sleeps for `ms` milliseconds and returns `value`
+    let handle = builder.spawn(move ||{
+        thread::sleep(Duration::from_millis(ms));
+        value
+    }).unwrap();
     // TODO: Join the thread and return the value
-    todo!()
+    handle.join().unwrap()
 }
 
 thread_local! {
@@ -200,7 +223,10 @@ thread_local! {
 /// Hint: Use `THREAD_COUNT.with(|cell| { ... })` to access the thread‑local variable.
 pub fn increment_thread_local() -> usize {
     // TODO: Use THREAD_COUNT.with to increment and return the new count
-    todo!()
+    THREAD_COUNT.with(|cell|{
+        *cell.borrow_mut() += 1;
+        *cell.borrow()
+    })
 }
 
 /// Spawn two threads using a **scoped thread** to compute the sum of two slices without moving ownership.
@@ -216,7 +242,24 @@ pub fn scoped_slice_sum(a: &[i32], b: &[i32]) -> (i32, i32) {
     // TODO: Use thread::scope to spawn two threads
     // TODO: Each thread sums its slice
     // TODO: Wait for both threads and return the results
-    todo!()
+    thread::scope(|s| {
+        let handle_first = s.spawn(||{
+            let mut result = 0;
+            for i in a {
+                result += *i;
+            }
+            result
+        });
+        let handle_second = s.spawn(||{
+            let mut result = 0;
+            for i in b {
+                result += *i;
+            }
+            result
+        });
+        (handle_first.join().unwrap(), handle_second.join().unwrap())
+    })
+
 }
 
 /// Handle a possible panic in a spawned thread.
@@ -232,8 +275,18 @@ pub fn scoped_slice_sum(a: &[i32], b: &[i32]) -> (i32, i32) {
 #[allow(unused_variables)]
 pub fn handle_panic(value: i32, should_panic: bool) -> Result<i32, ()> {
     // TODO: Spawn a thread that either panics or returns value
+    let handle = thread::spawn(move ||{
+        if should_panic {
+            panic!("oops");
+        } else {
+            value
+        }
+    });
     // TODO: Join and map the result appropriately
-    todo!()
+    match handle.join() {
+        Ok(x) => Ok(x),
+        Err(_) => Err(()),
+    }
 }
 
 #[cfg(test)]

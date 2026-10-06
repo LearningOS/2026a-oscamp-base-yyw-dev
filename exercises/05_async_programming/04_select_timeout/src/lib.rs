@@ -7,6 +7,10 @@
 //! - `tokio::time::timeout` timeout control
 //! - The first completed branch is executed, others are cancelled
 
+/*
+1.tokio::select!用来实现并发控制，tokio::time::timeout实现超时控制
+ */
+
 use std::future::Future;
 use tokio::time::{sleep, Duration};
 
@@ -21,7 +25,11 @@ where
 {
     // TODO: Use tokio::select! to race between future and sleep
     // Or use tokio::time::timeout
-    todo!()
+    //tokio::time::timeout(Duration::from_millis(timeout_ms), future).await.ok()
+    tokio::select! {
+        result = future => Some(result),
+        _ = sleep(Duration::from_millis(timeout_ms)) => None,
+    }
 }
 
 /// Race two async tasks, return the result of whichever finishes first.
@@ -34,7 +42,10 @@ where
 {
     // TODO: Use tokio::select! to wait for f1 and f2
     // Return the result of whichever completes first
-    todo!()
+    tokio::select! {
+        result = f1 => result,
+        result = f2 => result,
+    }
 }
 
 #[cfg(test)]

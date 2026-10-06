@@ -7,6 +7,13 @@
 //! - Async `send` and `recv`
 //! - Channel closing mechanism (receiver returns None after all senders are dropped)
 
+/*
+1.tokio的异步mpsc::channel需要指定缓冲区大小和类型，items.len().max(1)
+2.tokio::sync::mpsc 得到的tx.send() rx.recv()返回的结果是一个future，future是惰性的需要异步执行启动，先.await才会返回Result<>
+tokio::spawn（future）就已经启动了，.await只是在等待结束和返回值
+3.rx.recv()需要&mut self，所以rx必须是let mut 变量
+ */
+
 use tokio::sync::mpsc;
 
 /// Async producer-consumer:
@@ -19,7 +26,22 @@ pub async fn producer_consumer(items: Vec<String>) -> Vec<String> {
     // TODO: Spawn producer task: iterate through items, send each one
     // TODO: Spawn consumer task: loop recv until channel closes, collect results
     // TODO: Wait for consumer to complete and return results
-    todo!()
+    let (tx,mut rx) = mpsc::channel(items.len().max(1));
+    tokio::spawn(async move {
+        for item in items {
+            tx.send(item).await.unwrap();
+        }
+    });
+
+    let handle = tokio::spawn(async move {
+        let mut result = Vec::new();
+        while let Some(item) = rx.recv().await {
+            result.push(item);
+        }
+        result
+    });
+
+    handle.await.unwrap()
 }
 
 /// Fan‑in pattern: multiple producers, one consumer.
@@ -31,7 +53,24 @@ pub async fn fan_in(n_producers: usize) -> Vec<String> {
     //       Each sends format!("producer {id}: message")
     // TODO: Drop the original sender (important! otherwise channel won't close)
     // TODO: Consumer loops receiving, collects and sorts
-    todo!()
+    let (tx, mut rx) = mpsc::channel(n_producers.max(1));
+    for id in 0..n_producers {
+        let tx_next = tx.clone();
+        tokio::spawn( async move {
+            let item = format!("producer {}: message", id);
+            tx_next.send(item).await.unwrap();
+        });
+    }
+    drop(tx);
+    let handle = tokio::spawn(async move {
+        let mut result = Vec::new();
+        while let Some(item) = rx.recv().await {
+            result.push(item);
+        }
+        result.sort();
+        result
+    });
+    handle.await.unwrap()
 }
 
 #[cfg(test)]

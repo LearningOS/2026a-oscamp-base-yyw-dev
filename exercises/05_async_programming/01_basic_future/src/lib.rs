@@ -11,6 +11,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+/*
+1.手动实现future trait，存在关联类型type output = poll函数的返回值类型, Poll<Self::output>
+ */
 /// Countdown Future: decrements count by 1 each time it's polled,
 /// returns `"liftoff!"` when count reaches 0.
 pub struct CountDown {
@@ -33,7 +36,15 @@ impl Future for CountDown {
     type Output = &'static str;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        todo!()
+        let this = self.get_mut();
+        if this.count == 0 {
+            return Poll::Ready("liftoff!");
+        } else {
+            this.count -= 1;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+
     }
 }
 
@@ -57,7 +68,14 @@ impl Future for YieldOnce {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        todo!()
+        let this = self.get_mut(); 
+        if this.yielded == true {
+            Poll::Ready(())
+        } else {
+            this.yielded = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
     }
 }
 
